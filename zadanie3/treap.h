@@ -3,12 +3,10 @@
 #include <assert.h>
 
 
-
-
-
 template<class T, class CompareType = std::less<T>, class URNG = std::default_random_engine>
 class treap {
 private:
+
     URNG random_gen;
     CompareType compare;
     class node {
@@ -41,11 +39,23 @@ private:
             }
         }
         void clear(){
-            parent = nullptr;
-            if(has_left())  left->clear();
-            delete left;
-            if(has_right()) right->clear();
-            delete right;
+            if(left != nullptr){
+                left->clear();
+            }
+            if(right != nullptr){
+                right->clear();
+            }
+            delete this;
+        }
+        void erase(){
+            if(parent != nullptr){
+                if(parent->left == this){
+                    parent->left = nullptr;
+                }else{
+                    parent->right = nullptr;
+                }
+            }
+            clear();
         }
         void toJSON(std::ostream& out){
             out << "{";
@@ -69,8 +79,8 @@ private:
         }
 
     };
-    node* root;
 
+    node* root;
 public:
 
     treap() : treap({}) {
@@ -160,14 +170,10 @@ public:
             }
         }
     }
-    void insert(T& value){
-        float random_priority = std::generate_canonical<float, 10>(random_gen);
-        node* n = new node(value, random_priority);
-
-        insertBST(n);
+    inline void ascend(node* n){
         while(n != root){
             if(n->priority > n->parent->priority){
-                if(n->parent->value < n->value){
+                if(compare(n->parent->value, n->value)){
                     rotate_left(n);
                 }else{
                     rotate_right(n);
@@ -177,24 +183,63 @@ public:
             }
         }
     }
+    inline void descend(node* n){
+        float leftp, rightp;
+        while(n->has_left() && n->has_right()){
+
+            if(n->has_left()) leftp = n->left->priority;
+            else leftp = -1;
+            if(n->has_right()) rightp = n->right->priority;
+            else rightp = -1;
+
+            if(leftp > rightp){
+                rotate_right(n->left);
+            }else{
+                rotate_left(n->right);
+            }
+        }
+    }
+    void insert(T& value){
+        float random_priority = std::generate_canonical<float, 10>(random_gen);
+        node* n = new node(value, random_priority);
+
+        insertBST(n);
+        ascend(n);
+    }
+
     template<typename... Args>
     void emplace(Args... args){
         float random_priority = std::generate_canonical<float, 10>(random_gen);
         node* n = new node(random_priority, args...);
 
         insertBST(n);
-        while(n != root){
-            if(n->priority > n->parent->priority){
-                if(n->parent->value < n->value){
-                    rotate_left(n);
-                }else{
-                    rotate_right(n);
-                }
-            }else{
-                break;
-            }
-        }
+        ascend(n);
     }
+    bool erase(T& value){
+        node* n = root;
+        while(n != nullptr){
+            if(compare(value, n->value)){
+                if(!compare(n->value, value)){
+                    descend(n);
+                    if(n->parent == nullptr) root = nullptr;
+                    n->erase();
+                    return true;
+                }
+                n = n->left;
+            }else{
+                if(!compare(n->value, value)){
+                    descend(n);
+                    if(n->parent == nullptr) root = nullptr;
+                    n->erase();
+                    return true;
+                }
+                n = n->right;
+            }
+
+        }
+        return false;
+    }
+
     void rotate_right(node* x){
         node* y = x->parent;
         node* b = x->right;
@@ -223,8 +268,10 @@ public:
     }
 
     void clear(){
-        node* n = root;
-        n->clear();
+        if(root != nullptr){
+            root->clear();
+            root = nullptr;
+        }
     }
     ~treap(){
         clear();
@@ -238,4 +285,3 @@ public:
     }
 
 };
-
